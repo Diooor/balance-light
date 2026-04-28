@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>平衡燈模擬器 · micro:bit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-1: #0d1017;
+    --bg-2: #161b26;
+    --grid-line: rgba(255, 255, 255, 0.025);
+
+    --board: #c8392e;
+    --board-edge: #8a2018;
+    --board-hi: #e35545;
+    --board-shadow: rgba(0, 0, 0, 0.55);
+
+    --led-off: #2a0a07;
+    --led-off-rim: #4a1612;
+    --led-on-core: #fff4c2;
+    --led-on-mid: #ffb84a;
+    --led-on-edge: #c46a00;
+
+    --gold: #d4a73c;
+    --gold-dark: #8a6920;
+    --silver: #b8bcc6;
+
+    --text: #f3ede1;
+    --muted: #8d92a0;
+    --accent: #ffb84a;
+
+    --tilt-x: 0deg;
+    --tilt-y: 0deg;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(200, 57, 46, 0.12), transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(255, 184, 74, 0.08), transparent 50%),
+      linear-gradient(180deg, var(--bg-1), var(--bg-2));
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: 'Noto Serif TC', serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+  }
+
+  /* ---------- HEADER ---------- */
+  header {
+    text-align: center;
+    margin-top: 8px;
+  }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    opacity: 0.85;
+  }
+
+  h1 {
+    font-family: 'Noto Serif TC', serif;
+    font-weight: 700;
+    font-size: clamp(28px, 7vw, 38px);
+    letter-spacing: 0.08em;
+    background: linear-gradient(180deg, #fff4dc, #d4a73c);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    line-height: 1.2;
+  }
+
+  .subtitle {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 6px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ---------- STAGE ---------- */
+  .stage {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    max-width: 380px;
+    perspective: 1400px;
+    perspective-origin: 50% 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .stage::after {
+    content: '';
+    position: absolute;
+    bottom: 6%;
+    left: 12%;
+    right: 12%;
+    height: 24px;
+    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55), transparent 70%);
+    filter: blur(6px);
+    transform: translateZ(-50px);
+    z-index: -1;
+  }
+
+  /* ---------- MICROBIT BOARD ---------- */
+  .microbit {
+    position: relative;
+    width: 86%;
+    aspect-ratio: 5 / 4;
+    background:
+      radial-gradient(ellipse at 30% 25%, var(--board-hi), transparent 45%),
+      linear-gradient(135deg, var(--board) 0%, #b62e24 70%, var(--board-edge) 100%);
+    border-radius: 18px;
+    transform-style: preserve-3d;
+    transform:
+      rotateX(var(--tilt-x))
+      rotateY(var(--tilt-y));
+    transition: transform 0.18s cubic-bezier(0.34, 1.2, 0.64, 1);
+    box-shadow:
+      0 22px 40px -12px var(--board-shadow),
+      0 8px 20px -6px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1.5px var(--board-edge),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  }
+
+  /* PCB silkscreen texture */
+  .microbit::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 18px;
+    background:
+      repeating-linear-gradient(45deg, transparent 0 6px, rgba(0,0,0,0.025) 6px 7px);
+    pointer-events: none;
+    mix-blend-mode: multiply;
+  }
+
+  /* ---------- TOP CONNECTORS ---------- */
+  .top-bar {
+    position: absolute;
+    top: -7%;
+    left: 0;
+    right: 0;
+    height: 14%;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 18%;
+  }
+
+  .usb {
+    width: 22%;
+    height: 70%;
+    background: linear-gradient(180deg, #d8d8de, #8a8c95 60%, #5a5c64);
+    border-radius: 3px 3px 1px 1px;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.4),
+      0 2px 4px rgba(0, 0, 0, 0.4);
+    position: relative;
+  }
+  .usb::after {
+    content: '';
+    position: absolute;
+    inset: 22% 18%;
+    background: #1a1a1f;
+    border-radius: 1px;
+  }
+
+  .battery {
+    width: 14%;
+    height: 55%;
+    background: linear-gradient(180deg, #f5f5f0, #d4d2c5);
+    border-radius: 2px;
+    box-shadow:
+      inset 0 -2px 3px rgba(0, 0, 0, 0.25),
+      0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+
+  /* ---------- LOGO ---------- */
+  .logo {
+    position: absolute;
+    top: 6%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 16%;
+    width: 18%;
+    aspect-ratio: 2 / 1;
+  }
+  .logo-eye {
+    flex: 1;
+    background: #1a1a1f;
+    border-radius: 50%;
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.15),
+      0 0 2px rgba(0, 0, 0, 0.5);
+  }
+
+  .corner-screw {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #d8d8de, #6a6c74 60%, #2a2c34);
+    box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.5);
+  }
+  .corner-screw.tl { top: 8px; left: 8px; }
+  .corner-screw.tr { top: 8px; right: 8px; }
+
+  /* ---------- BUTTONS A & B ---------- */
+  .pad-btn {
+    position: absolute;
+    width: 13%;
+    aspect-ratio: 1;
+    top: 48%;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #2a2a30, #18181c);
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.18),
+      inset 0 -2px 3px rgba(0, 0, 0, 0.6),
+      0 2px 3px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #c0c2cc;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+  }
+  .pad-btn.a { left: 4%; }
+  .pad-btn.b { right: 4%; }
+
+  /* ---------- LED GRID ---------- */
+  .grid-frame {
+    position: absolute;
+    top: 22%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 64%;
+    aspect-ratio: 1;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(5, 1fr);
+    gap: 6%;
+    padding: 4%;
+    background: linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.08));
+    border-radius: 4px;
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, 0.4),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .led {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    align-self: center;
+    justify-self: center;
+    background:
+      radial-gradient(circle at 50% 30%, var(--led-off-rim), var(--led-off) 70%);
+    border-radius: 22% / 16%;
+    box-shadow:
+      inset 0 1px 1px rgba(0, 0, 0, 0.6),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+    transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+    position: relative;
+  }
+
+  .led.on {
+    background:
+      radial-gradient(circle at 45% 25%, var(--led-on-core) 0%, var(--led-on-mid) 45%, var(--led-on-edge) 100%);
+    box-shadow:
+      0 0 6px rgba(255, 184, 74, 0.95),
+      0 0 14px rgba(255, 149, 0, 0.7),
+      0 0 28px rgba(255, 100, 0, 0.4),
+      inset 0 -1px 1px rgba(80, 30, 0, 0.4),
+      inset 0 1px 1px rgba(255, 255, 255, 0.5);
+    transform: scale(1.04);
+  }
+
+  /* ---------- EDGE CONNECTOR ---------- */
+  .edge {
+    position: absolute;
+    bottom: 1.5%;
+    left: 5%;
+    right: 5%;
+    height: 8%;
+    display: flex;
+    gap: 1.2%;
+    padding: 0 2%;
+  }
+
+  .pad {
+    flex: 1;
+    background: linear-gradient(180deg, #f0c860 0%, var(--gold) 50%, var(--gold-dark) 100%);
+    border-radius: 1px 1px 2px 2px;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.4),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+  }
+  .pad.big { flex: 2.4; }
+
+  /* ---------- DIRECTION COMPASS ---------- */
+  .compass {
+    width: 100%;
+    max-width: 380px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    font-family: 'Noto Serif TC', serif;
+    font-size: 13px;
+  }
+
+  .compass-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    color: var(--muted);
+    transition: all 0.2s ease;
+  }
+  .compass-item.active {
+    color: var(--accent);
+    background: rgba(255, 184, 74, 0.08);
+    border-color: rgba(255, 184, 74, 0.35);
+    box-shadow: 0 0 14px rgba(255, 184, 74, 0.15);
+  }
+  .compass-item .arrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--accent);
+    width: 18px;
+    text-align: center;
+    opacity: 0.7;
+  }
+  .compass-item.active .arrow {
+    opacity: 1;
+  }
+
+  /* ---------- DPAD ---------- */
+  .dpad-wrap {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 56px);
+    grid-template-rows: repeat(3, 56px);
+    gap: 4px;
+  }
+
+  .dpad button {
+    background: linear-gradient(180deg, #232a37, #161a24);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text);
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.12s ease;
+    box-shadow:
+      0 2px 0 rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  .dpad button:active,
+  .dpad button.held {
+    background: linear-gradient(180deg, var(--accent), #d8911f);
+    color: #1a1004;
+    transform: translateY(1px);
+    box-shadow:
+      0 0 16px rgba(255, 184, 74, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  .dpad .up    { grid-column: 2; grid-row: 1; }
+  .dpad .left  { grid-column: 1; grid-row: 2; }
+  .dpad .reset { grid-column: 2; grid-row: 2; font-size: 11px; font-family: 'Noto Serif TC', serif; }
+  .dpad .right { grid-column: 3; grid-row: 2; }
+  .dpad .down  { grid-column: 2; grid-row: 3; }
+
+  .dpad .reset {
+    background: linear-gradient(180deg, #2d1818, #1a0d0d);
+    border-color: rgba(200, 57, 46, 0.3);
+    color: #d4a73c;
+  }
+  .dpad .reset:active {
+    background: linear-gradient(180deg, #c8392e, #8a2018);
+    color: #fff4dc;
+  }
+
+  /* ---------- INFO PANEL ---------- */
+  .info {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+  }
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    min-width: 110px;
+  }
+  .info-row .key { color: var(--muted); font-size: 11px; }
+  .info-row .val { color: var(--accent); font-weight: 600; }
+
+  .gyro-btn {
+    margin-top: 8px;
+    padding: 10px 16px;
+    background: transparent;
+    border: 1px solid rgba(255, 184, 74, 0.3);
+    color: var(--accent);
+    border-radius: 6px;
+    font-family: 'Noto Serif TC', serif;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .gyro-btn:hover, .gyro-btn.active {
+    background: rgba(255, 184, 74, 0.12);
+    box-shadow: 0 0 14px rgba(255, 184, 74, 0.2);
+  }
+  .gyro-btn.active {
+    color: #1a1004;
+    background: var(--accent);
+  }
+
+  /* ---------- HINT ---------- */
+  .hint {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    letter-spacing: 0.06em;
+    margin-top: -4px;
+  }
+  .hint kbd {
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    color: var(--text);
+  }
+
+  @media (max-width: 480px) {
+    .dpad-wrap { flex-direction: column; gap: 16px; }
+    .compass { font-size: 12px; }
+    .compass-item { padding: 8px 10px; gap: 6px; }
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="eyebrow">Posture Sensor · 平衡燈</div>
+      <h1>平衡燈模擬器</h1>
+      <p class="subtitle">前後左右翻轉開發板，LED 燈會滾向最低處</p>
+    </header>
+
+    <div class="stage">
+      <div class="microbit" id="microbit">
+        <div class="top-bar">
+          <div class="usb"></div>
+          <div class="battery"></div>
+        </div>
+        <div class="logo">
+          <div class="logo-eye"></div>
+          <div class="logo-eye"></div>
+        </div>
+        <div class="corner-screw tl"></div>
+        <div class="corner-screw tr"></div>
+
+        <div class="grid-frame" id="grid"></div>
+
+        <div class="pad-btn a">A</div>
+        <div class="pad-btn b">B</div>
+
+        <div class="edge">
+          <div class="pad big"></div>
+          <div class="pad big"></div>
+          <div class="pad big"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad"></div>
+          <div class="pad big"></div>
+          <div class="pad big"></div>
+          <div class="pad big"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="compass">
+      <div class="compass-item" data-dir="left"><span class="arrow">←</span>左側偏低</div>
+      <div class="compass-item" data-dir="right"><span class="arrow">→</span>右側偏低</div>
+      <div class="compass-item" data-dir="up"><span class="arrow">↑</span>標誌朝下</div>
+      <div class="compass-item" data-dir="down"><span class="arrow">↓</span>標誌朝上</div>
+    </div>
+
+    <div class="dpad-wrap">
+      <div class="dpad" id="dpad">
+        <button class="up"    data-dir="up">↑</button>
+        <button class="left"  data-dir="left">←</button>
+        <button class="reset" id="reset">重置</button>
+        <button class="right" data-dir="right">→</button>
+        <button class="down"  data-dir="down">↓</button>
+      </div>
+      <div class="info">
+        <div class="info-row"><span class="key">x</span><span class="val" id="xval">2</span></div>
+        <div class="info-row"><span class="key">y</span><span class="val" id="yval">2</span></div>
+        <button class="gyro-btn" id="gyroBtn">啟用陀螺儀</button>
+      </div>
+    </div>
+
+    <div class="hint">使用方向鍵 <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> · 或點按螢幕按鈕 · 手機可開啟陀螺儀</div>
+  </div>
+
+<script>
+  // ------- STATE -------
+  const state = {
+    x: 2,
+    y: 2,
+    dir: null,
+  };
+  const TICK_MS = 130;
+  const TILT_DEG = 18;
+
+  const board = document.getElementById('microbit');
+  const grid = document.getElementById('grid');
+  const xval = document.getElementById('xval');
+  const yval = document.getElementById('yval');
+  const compassItems = document.querySelectorAll('.compass-item');
+  const dpadButtons = document.querySelectorAll('#dpad button[data-dir]');
+
+  // ------- BUILD LED GRID -------
+  const leds = [];
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col < 5; col++) {
+      const led = document.createElement('div');
+      led.className = 'led';
+      led.dataset.x = col;
+      led.dataset.y = row;
+      grid.appendChild(led);
+      leds.push(led);
+    }
+  }
+
+  function getLED(x, y) {
+    return leds[y * 5 + x];
+  }
+
+  function render() {
+    leds.forEach(l => l.classList.remove('on'));
+    getLED(state.x, state.y).classList.add('on');
+    xval.textContent = state.x;
+    yval.textContent = state.y;
+  }
+
+  // ------- TILT VISUAL -------
+  function applyTiltVisual(dir) {
+    let rx = 0, ry = 0;
+    switch (dir) {
+      case 'left':  ry = -TILT_DEG; break;   // 左側偏低 → 左邊往前下
+      case 'right': ry =  TILT_DEG; break;
+      case 'up':    rx = -TILT_DEG; break;   // 標誌朝下 → 上邊往前下
+      case 'down':  rx =  TILT_DEG; break;   // 標誌朝上
+    }
+    board.style.setProperty('--tilt-x', rx + 'deg');
+    board.style.setProperty('--tilt-y', ry + 'deg');
+  }
+
+  function setActiveCompass(dir) {
+    compassItems.forEach(c => {
+      c.classList.toggle('active', c.dataset.dir === dir);
+    });
+    dpadButtons.forEach(b => {
+      b.classList.toggle('held', b.dataset.dir === dir);
+    });
+  }
+
+  // ------- MOVEMENT TICKS -------
+  let tickTimer = null;
+
+  function tickMove() {
+    let moved = false;
+    switch (state.dir) {
+      case 'left':  if (state.x > 0) { state.x--; moved = true; } break;
+      case 'right': if (state.x < 4) { state.x++; moved = true; } break;
+      case 'up':    if (state.y > 0) { state.y--; moved = true; } break;
+      case 'down':  if (state.y < 4) { state.y++; moved = true; } break;
+    }
+    if (moved) render();
+  }
+
+  function startTilt(dir) {
+    if (state.dir === dir) return;
+    state.dir = dir;
+    applyTiltVisual(dir);
+    setActiveCompass(dir);
+    if (tickTimer) clearInterval(tickTimer);
+    tickMove();
+    tickTimer = setInterval(tickMove, TICK_MS);
+  }
+
+  function stopTilt(dir) {
+    if (dir && state.dir !== dir) return;
+    state.dir = null;
+    applyTiltVisual(null);
+    setActiveCompass(null);
+    if (tickTimer) {
+      clearInterval(tickTimer);
+      tickTimer = null;
+    }
+  }
+
+  // ------- KEYBOARD -------
+  const keyMap = {
+    'ArrowLeft': 'left',
+    'ArrowRight': 'right',
+    'ArrowUp': 'up',
+    'ArrowDown': 'down',
+    'a': 'left', 'A': 'left',
+    'd': 'right', 'D': 'right',
+    'w': 'up', 'W': 'up',
+    's': 'down', 'S': 'down',
+  };
+
+  document.addEventListener('keydown', e => {
+    const dir = keyMap[e.key];
+    if (dir) {
+      e.preventDefault();
+      startTilt(dir);
+    } else if (e.key === 'r' || e.key === 'R') {
+      reset();
+    }
+  });
+
+  document.addEventListener('keyup', e => {
+    const dir = keyMap[e.key];
+    if (dir) stopTilt(dir);
+  });
+
+  // ------- DPAD BUTTONS (mouse + touch) -------
+  dpadButtons.forEach(btn => {
+    const dir = btn.dataset.dir;
+    const start = e => { e.preventDefault(); startTilt(dir); };
+    const end = e => { e.preventDefault(); stopTilt(dir); };
+    btn.addEventListener('mousedown', start);
+    btn.addEventListener('mouseup', end);
+    btn.addEventListener('mouseleave', end);
+    btn.addEventListener('touchstart', start, { passive: false });
+    btn.addEventListener('touchend', end, { passive: false });
+    btn.addEventListener('touchcancel', end, { passive: false });
+  });
+
+  // ------- RESET -------
+  function reset() {
+    stopTilt();
+    state.x = 2;
+    state.y = 2;
+    render();
+  }
+  document.getElementById('reset').addEventListener('click', reset);
+
+  // ------- GYROSCOPE -------
+  const gyroBtn = document.getElementById('gyroBtn');
+  let gyroActive = false;
+
+  function handleOrientation(e) {
+    if (!gyroActive) return;
+    const beta = e.beta || 0;    // front-back tilt, -180~180
+    const gamma = e.gamma || 0;  // left-right tilt, -90~90
+    const THRESH = 12;
+
+    let dir = null;
+    // Pick the strongest tilt
+    if (Math.abs(gamma) > Math.abs(beta - 30)) {
+      if (gamma < -THRESH) dir = 'left';
+      else if (gamma > THRESH) dir = 'right';
+    } else {
+      // beta around 30~50 is "natural holding" → treat as level
+      const adj = beta - 35;
+      if (adj < -THRESH) dir = 'up';
+      else if (adj > THRESH) dir = 'down';
+    }
+
+    if (dir) {
+      if (state.dir !== dir) startTilt(dir);
+    } else {
+      if (state.dir) stopTilt();
+    }
+  }
+
+  async function enableGyro() {
+    if (gyroActive) {
+      gyroActive = false;
+      gyroBtn.classList.remove('active');
+      gyroBtn.textContent = '啟用陀螺儀';
+      stopTilt();
+      window.removeEventListener('deviceorientation', handleOrientation);
+      return;
+    }
+    try {
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const perm = await DeviceOrientationEvent.requestPermission();
+        if (perm !== 'granted') {
+          gyroBtn.textContent = '權限被拒';
+          return;
+        }
+      }
+      window.addEventListener('deviceorientation', handleOrientation);
+      gyroActive = true;
+      gyroBtn.classList.add('active');
+      gyroBtn.textContent = '陀螺儀啟用中';
+    } catch (err) {
+      gyroBtn.textContent = '不支援此裝置';
+    }
+  }
+  gyroBtn.addEventListener('click', enableGyro);
+
+  // ------- INIT -------
+  render();
+</script>
+</body>
+</html>
